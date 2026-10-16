@@ -12,3 +12,5 @@ Os cards contam TVs. Os filtros exibem lotes contendo TVs no status escolhido. U
 
 ## Controladoria
 Modelos configuráveis com cabeçalho, logotipo PNG/JPG e condições. Cadastro de empresa solicitante, CNPJ, representante e contato. PDFs gerados no navegador com pdf-lib, guardados em IndexedDB; o histórico e os modelos usam localStorage. Ordens de serviço e rascunhos sem validade fiscal. Não há integração com emissor fiscal.
+
+Os dados da prestadora são configurados uma única vez pelo administrador em Controladoria > Configurar prestadora e aplicados a todas as novas OS e notas. Incluem logotipo, nome, CNPJ, endereço e contatos. Os PDFs usam layout A4 com cabeçalho, bloco da solicitante, tabela de equipamentos, serviços e total. Cada documento guarda os dados da prestadora utilizados na emissão; os PDFs históricos são preservados.

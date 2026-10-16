@@ -15,6 +15,7 @@ function financeSource(scope, id) {
     service: lot ? devices.map(t => `${reference(t)}\n${t.serviceNotes || 'Serviços executados ainda não informados.'}`).join('\n\n') : tv.serviceNotes || '',
     lotId: lot ? lot.id : tv.lot,
     tvId: tv ? tv.id : '',
+    items: devices.map(t=>({model:t.model,serial:t.serial,os:t.os,status:t.status,quantity:1})),
     deviceIds: devices.map(t => t.id)
   };
 }
@@ -27,13 +28,14 @@ function financeQuickDocument(kind, scope, id) {
 }
 
 function financeDocument(templateId, context = {}) {
-  const finance = financeDB();
+  const finance = financeDB(), provider=financeProvider();
+  if(!provider.configured)return toast(current.role==='Administrador'?'Configure a prestadora na Controladoria antes de gerar documentos.':'Solicite ao administrador o cadastro da prestadora na Controladoria.');
   if(!finance.templates.length)return toast('Cadastre um modelo na Controladoria antes de gerar documentos.');
   const initialTemplate = finance.templates.find(t => t.id === templateId) || financeDefaultTemplate('OS') || finance.templates[0];
   const initialScope = context.scope === 'lot' ? 'lot' : 'device';
   const nextNumber = String(finance.documents.length + 1).padStart(6, '0');
   showModal('Preparar documento', `
-    <label>Modelo<select name="template" id="documenttemplate">${finance.templates.map(t => `<option value="${t.id}" ${t.id === initialTemplate.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>
+    <p class="note">Prestadora padrão: <strong>${esc(provider.name)}</strong><br>CNPJ: ${esc(provider.cnpj)}</p><label>Modelo<select name="template" id="documenttemplate">${finance.templates.map(t => `<option value="${t.id}" ${t.id === initialTemplate.id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>
     <label>Gerar documento para<select name="scope" id="documentscope"><option value="device" ${initialScope === 'device' ? 'selected' : ''}>Dispositivo específico</option><option value="lot" ${initialScope === 'lot' ? 'selected' : ''}>Lote completo</option></select></label>
     <label id="documenttvlabel">Equipamento / OS de entrada<select name="tvId" id="documenttv"><option value="">Selecione um equipamento</option>${db.tvs.map(t => `<option value="${t.id}" ${initialScope === 'device' && t.id === context.id ? 'selected' : ''}>OS ${esc(t.os)} · ${esc(t.model)} · ${esc(t.serial)}</option>`).join('')}</select></label>
     <label id="documentlotlabel">Lote<select name="lotId" id="documentlot"><option value="">Selecione um lote</option>${db.lots.map(l => `<option value="${esc(l.id)}" ${initialScope === 'lot' && l.id === context.id ? 'selected' : ''}>${esc(l.id)} · ${esc(l.origin)} (${db.tvs.filter(t => t.lot === l.id).length} TVs)</option>`).join('')}</select></label>
@@ -41,6 +43,8 @@ function financeDocument(templateId, context = {}) {
     ${financeInput('company', 'Empresa solicitante', '', 'required maxlength="150"')}
     <div class="formgrid">${financeInput('cnpj', 'CNPJ da solicitante', '', 'required maxlength="18" placeholder="00.000.000/0000-00"')}${financeInput('representative', 'Nome do representante', '', 'required maxlength="120"')}</div>
     ${financeInput('contact', 'Contato do representante', '', 'required maxlength="150" placeholder="Telefone e/ou e-mail"')}
+    ${financeInput('clientAddress', 'Endereço da solicitante', '', 'maxlength="300"')}
+    ${financeInput('clientIe', 'Inscrição estadual / municipal da solicitante', '', 'maxlength="60"')}
     <label>Equipamentos / referências<textarea name="equipment" rows="4"></textarea></label>
     <label>Serviços executados<textarea name="service" required rows="5"></textarea></label>
     ${financeInput('amount', 'Valor total do documento (R$)', '', 'type="number" min="0" step="0.01" required')}
@@ -61,10 +65,10 @@ function financeDocument(templateId, context = {}) {
       if (!validCnpj(values.cnpj)) throw Error('Informe um CNPJ válido.');
       if (template.kind !== 'OS' && finance.documents.some(d => d.kind === template.kind && d.number === values.number)) throw Error('Já existe um documento desse tipo com este número.');
       // Keep the selected equipment identities canonical in the PDF.
-      const data = { ...values, equipment: source.equipment, lotId: source.lotId, tvId: source.tvId, deviceIds: source.deviceIds,
+      const data = { ...values, equipment: source.equipment, lotId: source.lotId, tvId: source.tvId, deviceIds: source.deviceIds, items:source.items, providerSnapshot:{...provider}, createdAt:new Date().toISOString(),
         id: crypto.randomUUID(), kind: template.kind, responsible: current.name, createdBy: current.login,
         amount: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(values.amount)),
-        heading: template.heading, issuer: template.issuer, issuerCnpj: template.issuerCnpj, issuerContact: template.issuerContact, terms: template.terms };
+        issuer: provider.name, issuerCnpj: provider.cnpj, issuerContact: provider.phone, terms: template.terms };
       const bytes = await financePDF(data, template);
       await financeFile('doc:' + data.id, bytes);
       finance.documents.push(data); save(); $('#modal').close();
