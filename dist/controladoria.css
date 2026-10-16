@@ -2,3 +2,5 @@
 [hidden]{display:none!important}
 
 .document-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.document-actions .link{font-size:11px}td .document-actions{margin-top:10px}.heading>.document-actions{justify-content:flex-end;max-width:500px}@media(max-width:700px){.heading>.document-actions{max-width:180px}}
+
+.danger-link{color:#ad3344}.btn.danger{background:#ad3344;border-color:#ad3344;color:white}.finance-template .actions{flex-wrap:wrap;gap:12px}

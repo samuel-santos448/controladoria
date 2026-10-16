@@ -28,6 +28,7 @@ function financeQuickDocument(kind, scope, id) {
 
 function financeDocument(templateId, context = {}) {
   const finance = financeDB();
+  if(!finance.templates.length)return toast('Cadastre um modelo na Controladoria antes de gerar documentos.');
   const initialTemplate = finance.templates.find(t => t.id === templateId) || financeDefaultTemplate('OS') || finance.templates[0];
   const initialScope = context.scope === 'lot' ? 'lot' : 'device';
   const nextNumber = String(finance.documents.length + 1).padStart(6, '0');
