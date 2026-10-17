@@ -64,9 +64,10 @@ function financeDocument(templateId, context = {}) {
       }
       if (!validCnpj(values.cnpj)) throw Error('Informe um CNPJ válido.');
       if (template.kind !== 'OS' && finance.documents.some(d => d.kind === template.kind && d.number === values.number)) throw Error('Já existe um documento desse tipo com este número.');
+      serviceEditor.setDeviceCount(source.deviceIds.length);
       const serviceSnapshot = serviceEditor.snapshot();
       // Keep record identities and monetary totals canonical in the PDF.
-      const data = { ...values, equipment: source.equipment, lotId: source.lotId, tvId: source.tvId, deviceIds: source.deviceIds, items:source.items, services:serviceSnapshot.services, amountCents:serviceSnapshot.totalCents, providerSnapshot:{...provider}, createdAt:new Date().toISOString(),
+      const data = { ...values, equipment: source.equipment, lotId: source.lotId, tvId: source.tvId, deviceIds: source.deviceIds, items:source.items, deviceCount:source.deviceIds.length, services:serviceSnapshot.services, amountCents:serviceSnapshot.totalCents, providerSnapshot:{...provider}, createdAt:new Date().toISOString(),
         id: crypto.randomUUID(), kind: template.kind, responsible: current.name, createdBy: current.login,
         amount: serviceMoney(serviceSnapshot.totalCents),
         issuer: provider.name, issuerCnpj: provider.cnpj, issuerContact: provider.phone, terms: template.terms };
@@ -101,6 +102,7 @@ function financeDocument(templateId, context = {}) {
     $('#fiscalnote').textContent = isOS
       ? isLot ? 'OS consolidada com o identificador do lote. As OS de entrada de cada TV são preservadas nas referências.' : 'A numeração será a mesma OS cadastrada na entrada do equipamento. Reemissões preservam esse número.'
       : 'Rascunho de nota, sem validade fiscal. O valor informado corresponde ao documento completo.';
+    if(source)serviceEditor.setDeviceCount(source.deviceIds.length);
     $('#form [name="equipment"]').value = source?.equipment || '';
     if (copyServices) $('#form [name="service"]').value = source?.service || '';
   }

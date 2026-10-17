@@ -78,7 +78,7 @@ async function financePDF(data, template) {
   }
   const columns = [28, 159, 128, 88, 40, 80.28];
   function tableHeader() {
-    ensure(48); text('EQUIPAMENTOS / ITENS DO SERVIÇO', left, y, 9, bold); y -= 12;
+    ensure(48); text('EQUIPAMENTOS / ITENS DO SERVIÇO · '+(data.deviceCount||data.items?.length||1)+' dispositivo(s)', left, y, 9, bold); y -= 12;
     page.drawRectangle({ x: left, y: y - 24, width, height: 24, color: pale, borderColor: grey, borderWidth: .5 });
     let x = left; ['ITEM', 'EQUIPAMENTO', 'NÚMERO DE SÉRIE', 'OS DE ENTRADA', 'QTDE', 'STATUS'].forEach((label, i) => { text(label, x + 5, y - 15, 7, bold); x += columns[i]; }); y -= 24;
   }
