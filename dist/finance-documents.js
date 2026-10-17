@@ -12,7 +12,7 @@ function financeSource(scope, id) {
   return {
     number: lot ? lot.id : String(tv.os).trim(),
     equipment: (lot ? [`Lote: ${lot.id} | Origem: ${lot.origin}`, ''] : []).concat(devices.map(reference)).join('\n'),
-    service: lot ? devices.map(t => `${reference(t)}\n${t.serviceNotes || 'Serviços executados ainda não informados.'}`).join('\n\n') : tv.serviceNotes || '',
+    service: lot ? devices.filter(t=>t.serviceNotes?.trim()).map(t => `${reference(t)}\n${t.serviceNotes}`).join('\n\n') : tv.serviceNotes || '',
     lotId: lot ? lot.id : tv.lot,
     tvId: tv ? tv.id : '',
     items: devices.map(t=>({model:t.model,serial:t.serial,os:t.os,status:t.status,quantity:1})),
@@ -46,8 +46,8 @@ function financeDocument(templateId, context = {}) {
     ${financeInput('clientAddress', 'Endereço da solicitante', '', 'maxlength="300"')}
     ${financeInput('clientIe', 'Inscrição estadual / municipal da solicitante', '', 'maxlength="60"')}
     <label>Equipamentos / referências<textarea name="equipment" rows="4"></textarea></label>
-    <label>Serviços executados<textarea name="service" required rows="5"></textarea></label>
-    ${financeInput('amount', 'Valor total do documento (R$)', '', 'type="number" min="0" step="0.01" required')}
+    <h2 style="font-size:17px;margin:24px 0 16px">Serviços prestados</h2><div id="documentservices"></div><label>Observações técnicas do equipamento (opcional)<textarea name="service" rows="4"></textarea></label>
+    ${financeInput('amount', 'Valor total do documento (R$)', '', 'type="number" min="0" step="0.01" readonly required')}
     <label>Observações<textarea name="notes" maxlength="2000"></textarea></label>
     <p class="note" id="fiscalnote"></p><p class="error" id="sourceerror" role="alert"></p>
     <small>Responsável pelo preenchimento: ${esc(current.name)}</small>`, async values => {
@@ -58,16 +58,17 @@ function financeDocument(templateId, context = {}) {
       if (!['lot', 'device'].includes(values.scope)) throw Error('Selecione o tipo de vínculo do documento.');
       const source = financeSource(values.scope, values.scope === 'lot' ? values.lotId : values.tvId);
       if (template.kind === 'OS') values.number = source.number;
-      for (const key of ['number', 'company', 'cnpj', 'representative', 'contact', 'service']) {
+      for (const key of ['number', 'company', 'cnpj', 'representative', 'contact']) {
         values[key] = String(values[key] || '').trim();
         if (!values[key]) throw Error('Preencha todos os campos obrigatórios.');
       }
       if (!validCnpj(values.cnpj)) throw Error('Informe um CNPJ válido.');
       if (template.kind !== 'OS' && finance.documents.some(d => d.kind === template.kind && d.number === values.number)) throw Error('Já existe um documento desse tipo com este número.');
-      // Keep the selected equipment identities canonical in the PDF.
-      const data = { ...values, equipment: source.equipment, lotId: source.lotId, tvId: source.tvId, deviceIds: source.deviceIds, items:source.items, providerSnapshot:{...provider}, createdAt:new Date().toISOString(),
+      const serviceSnapshot = serviceEditor.snapshot();
+      // Keep record identities and monetary totals canonical in the PDF.
+      const data = { ...values, equipment: source.equipment, lotId: source.lotId, tvId: source.tvId, deviceIds: source.deviceIds, items:source.items, services:serviceSnapshot.services, amountCents:serviceSnapshot.totalCents, providerSnapshot:{...provider}, createdAt:new Date().toISOString(),
         id: crypto.randomUUID(), kind: template.kind, responsible: current.name, createdBy: current.login,
-        amount: new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(values.amount)),
+        amount: serviceMoney(serviceSnapshot.totalCents),
         issuer: provider.name, issuerCnpj: provider.cnpj, issuerContact: provider.phone, terms: template.terms };
       const bytes = await financePDF(data, template);
       await financeFile('doc:' + data.id, bytes);
@@ -78,6 +79,7 @@ function financeDocument(templateId, context = {}) {
     finally { button.disabled = false; button.textContent = 'Gerar e baixar PDF'; }
   });
   $('#form .primary').textContent = 'Gerar e baixar PDF';
+  const serviceEditor = serviceDocumentEditor();
   const scopeSelect = $('#documentscope'), tvSelect = $('#documenttv'), lotSelect = $('#documentlot');
   const numberInput = $('#form [name="number"]');
   // References identify the records selected above; service descriptions remain editable.

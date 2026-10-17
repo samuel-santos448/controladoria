@@ -5,7 +5,7 @@ async function financePDF(data, template) {
   const ink = rgb(.06, .07, .1), blue = rgb(.02, .05, .6), grey = rgb(.43, .44, .46), pale = rgb(.95, .96, .97);
   const left = 36, width = 523.28, bottom = 64, provider = data.providerSnapshot || { name: data.issuer, cnpj: data.issuerCnpj, phone: data.issuerContact };
   const safe = value => String(value ?? '').replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, '-');
-  let page, y, logo;
+  let page, y, logo, contentTop;
   if (provider.logoKey) {
     const bytes = await financeFile(provider.logoKey);
     if (!bytes) throw Error('Logotipo da prestadora não encontrado. Solicite ao administrador que o cadastre novamente.');
@@ -46,7 +46,7 @@ async function financePDF(data, template) {
     text('Data de emissão: ' + fmt(data.date), left, lineY - 15, 8);
     text('Responsável: ' + (data.responsible || ''), left, lineY - 28, 8);
     const scope = data.scope === 'lot' ? 'Lote: ' + data.lotId : data.tvId ? 'OS de entrada: ' + data.number : '';
-    text(scope, 350, lineY - 15, 8); y = lineY - 48;
+    text(scope, 350, lineY - 15, 8); y = lineY - 48; contentTop = y;
   }
   function ensure(height) { if (y - height < bottom) newPage(); }
   function section(title, value) {
@@ -97,9 +97,40 @@ async function financePDF(data, template) {
       }
     }); y -= 14;
   }
+  function serviceTable() {
+    const widths = [24, 128, 191, 30, 75, 75.28];
+    const money = cents => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
+    function header() {
+      ensure(50); text('SERVIÇOS PRESTADOS', left, y, 9, bold); y -= 12;
+      page.drawRectangle({ x: left, y: y - 24, width, height: 24, color: pale, borderWidth: .5, borderColor: grey });
+      let x = left;
+      ['ITEM', 'SERVIÇO', 'DESCRIÇÃO', 'QTD', 'VALOR UNIT.', 'SUBTOTAL'].forEach((label, i) => { text(label, x + 4, y - 15, 7, bold); x += widths[i]; });
+      y -= 24;
+    }
+    header();
+    data.services.forEach((service, i) => {
+      const values = [i + 1, service.name, service.description, service.quantity, money(service.unitCents), money(service.totalCents)];
+      const cells = values.map((value, index) => wrap(value, widths[index] - 8, 8));
+      const length = Math.max(...cells.map(cell => cell.length)); let offset = 0;
+      const fullHeight=length*11+12;
+      if(fullHeight<=contentTop-bottom-36&&y-fullHeight<bottom){newPage();header();}
+      while (offset < length) {
+        if (y - 30 < bottom) { newPage(); header(); }
+        const count = Math.min(length - offset, Math.max(1, Math.floor((y - bottom - 12) / 11))), height = count * 11 + 12;
+        let x = left;
+        cells.forEach((lines, index) => {
+          page.drawRectangle({ x, y: y - height, width: widths[index], height, borderColor: grey, borderWidth: .4 });
+          for (let k = 0; k < count; k++) if (lines[offset + k] !== undefined) text(lines[offset + k], x + 4, y - 14 - k * 11, 8);
+          x += widths[index];
+        }); y -= height; offset += count;
+      }
+    }); y -= 14;
+  }
   newPage(); client();
   section('REFERÊNCIA / CONDIÇÕES', `${data.scope === 'lot' ? 'Lote completo: ' + data.lotId : 'Atendimento individual'}${template.terms ? '\n' + template.terms : ''}`);
-  equipmentTable(); section('SERVIÇOS EXECUTADOS', data.service);
+  equipmentTable();
+  if (data.services?.length) serviceTable();
+  if (data.service) section(data.services?.length ? 'OBSERVAÇÕES TÉCNICAS' : 'SERVIÇOS EXECUTADOS', data.service);
   if (data.notes) section('OBSERVAÇÕES', data.notes);
   ensure(50); page.drawRectangle({ x: left + width - 200, y: y - 39, width: 200, height: 39, color: pale, borderColor: grey, borderWidth: .7 });
   text('VALOR TOTAL DOS SERVIÇOS', left + width - 190, y - 13, 8, bold); text(data.amount || 'R$ 0,00', left + width - 190, y - 29, 12, bold); y -= 52;
